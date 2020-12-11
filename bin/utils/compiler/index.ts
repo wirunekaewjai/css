@@ -6,7 +6,7 @@ import fs from 'fs';
 import { CSSCollection, CSSValues, CSSValue, Generic } from '../../../css/types';
 import { CSSConfig } from '../../../config/types';
 
-import { join } from '../../../css/array';
+import { join, distinct } from '../../../css/array';
 import mergeValues from '../../../css/merge-values';
 
 import evaluator from '../evaluator';
@@ -269,38 +269,6 @@ function createCSSFile (ePath: string)
   }
 
   fs.writeFileSync(cOut, cCode);
-
-  // const cOut = path.join(config.out.css.dir, eName + '.css');
-  // const cCss: string[] = [];
-
-  // for (const screen of screenIndices)
-  // {
-  //   if (Array.isArray(css[screen]) && css[screen].length > 0)
-  //   {
-  //     const cssText = Array.from(new Set(css[screen])).join('\n');
-  //     const minWidth = screens[screen];
-
-  //     if (minWidth > 0)
-  //     {
-  //       cCss.push(`@media (min-width: ${minWidth}px) {\n${cssText}\n}`);
-  //     }
-  //     else
-  //     {
-  //       cCss.push(cssText);
-  //     }
-  //   }
-  // }
-
-  // if (!fs.existsSync(cOut))
-  // {
-  //   console.log('[create]', cOut);
-  // }
-  // else
-  // {
-  //   console.log('[update]', cOut);
-  // }
-
-  // fs.writeFileSync(cOut, cCss.join('\n\n'));
 }
 
 function sortCSSSelectors (selectors: string[])
@@ -365,7 +333,7 @@ function createCSSSourceCode (values: CSSValues)
         return join([e.name, e.selector], '');
       });
 
-      const selector = join(sortCSSSelectors(selectors), `, `);
+      const selector = join(distinct(sortCSSSelectors(selectors)), `, `);
       const element = `${selector} { ${key} }`;
 
       dst.push(element);

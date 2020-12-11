@@ -8,3 +8,8 @@ export function defined (arr: any[])
 {
   return arr.filter(e => !!e);
 }
+
+export function distinct (arr: any[])
+{
+  return arr.filter((e, i, a) => a.indexOf(e) === i);
+}
