@@ -1,6 +1,6 @@
 {
   "name": "@wirunekaewjai/css",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "",
   "main": "index.ts",
   "scripts": {
@@ -27,6 +27,7 @@
     "chokidar": "^3.4.3",
     "esbuild": "^0.8.16",
     "glob": "^7.1.6",
+    "hasha": "^5.2.2",
     "nanoid": "^3.1.20",
     "rimraf": "^3.0.2",
     "typescript": "^4.1.2",
