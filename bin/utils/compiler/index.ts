@@ -8,6 +8,7 @@ import * as hasha from 'hasha';
 import { CSSCollection, CSSValues, CSSValue, Generic } from '../../../css/types';
 import { CSSConfig } from '../../../config/types';
 
+import { cssFromString } from '../../../css';
 import { join, distinct } from '../../../css/array';
 import mergeValues from '../../../css/merge-values';
 
@@ -22,9 +23,8 @@ let config: CSSConfig;
 
 let hashes: Generic<string>;
 
-let entries: Generic<string>;
+let entries: Generic<string[]>;
 let entryReverses: Generic<string>;
-let entryPaths: string[];
 
 let globals: Generic<Generic<CSSValues>>;
 let globalPaths: Generic<string>;
@@ -52,11 +52,15 @@ function init ($config: CSSConfig)
 
   entries = config.out.css.entries;
   entryReverses = {};
-  entryPaths = Object.values(entries);
 
   for (const eName in entries)
   {
-    entryReverses[entries[eName]] = eName;
+    const ePaths = entries[eName];
+    
+    for (const ePath of ePaths)
+    {
+      entryReverses[ePath] = eName;  
+    }
   }
 
   modules = {};
@@ -71,16 +75,15 @@ function init ($config: CSSConfig)
 
   incremental.reset();
 
-  collectEntriesDependencies(entryPaths);
-  // collectStyles();
+  collectEntriesDependencies();
   collectFiles();
 }
 
 function build ()
 {
-  for (const ePath of entryPaths)
+  for (const eName in entries)
   {
-    createCSSFile(ePath);
+    createCSSFile(eName);
   }
 }
 
@@ -135,11 +138,14 @@ function isScript (filePath: string)
   return filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx');
 }
 
-function collectEntriesDependencies (ePaths: string[])
+function collectEntriesDependencies ()
 {
-  for (const ePath of ePaths)
+  for (const eName in entries)
   {
-    collectEntryDependencies(ePath);
+    for (const ePath of entries[eName])
+    {
+      collectEntryDependencies(ePath);
+    }
   }
 }
 
@@ -243,29 +249,112 @@ function onCreateOrUpdateStyleFile (sPath: string, buildable: boolean = false)
 
   setChanged(sPath);
 
-  const entry = evaluator.getConst(sPath, 'entry');
-  const css = (evaluator.getConst(sPath, 'default') ?? {}) as CSSCollection;
+  if (sPath.endsWith('.css'))
+  {
+    onCreateOrUpdateStyleFileFromCSS(sPath, buildable);
+  }
+  else
+  {
+    onCreateOrUpdateStyleFileFromScript(sPath, buildable);
+  }
+}
 
-  if (!css || Object.keys(css).length === 0)
+function onCreateOrUpdateStyleFileFromCSS (sPath: string, buildable: boolean = false)
+{
+  function getEntryName (text: string)
+  {
+    const names: string[] = [];
+
+    text.replace(/^\s*\/\*\s*[A-Za-z0-9-_]+\s*\*\//, (c, i) =>
+    {
+      names.push(c.trim().slice(2, -2).trim());
+      return c;
+    });
+
+    if (names.length > 0)
+    {
+      return names[0];
+    }
+
+    return undefined;
+  }
+
+  const cssCode = fs.readFileSync(sPath).toString('utf8');
+
+  if (!cssCode || cssCode?.trim()?.length === 0)
   {
     return;
   }
 
-  if (typeof entry === 'string' && entry?.length > 0)
+  const eName = getEntryName(cssCode);
+  const css = cssFromString(cssCode);
+
+  if (typeof eName === 'string' && eName.length > 0)
   {
-    if (!globals[entry])
+    if (!globals[eName])
     {
-      globals[entry] = {};
+      globals[eName] = {};
     }
 
-    globals[entry][sPath] = css.values;
-    globalPaths[sPath] = entry;
+    globals[eName][sPath] = css.values;
+    globalPaths[sPath] = eName;
 
     console.log('[collect]', sPath);
 
-    if (buildable && entries[entry])
+    if (buildable && entries[eName])
     {
-      createCSSFile(entries[entry]);
+      createCSSFile(eName);
+    }
+  }
+  else
+  {
+    const mods = createCSSModule(css.slugs);
+
+    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+    const cCode = `const names = ${JSON.stringify(mods, null, 2)};\n\nexport default names;`;
+
+    if (!fs.existsSync(cPath))
+    {
+      console.log('[create]', cPath);
+    }
+    else
+    {
+      console.log('[update]', cPath);
+    }
+
+    fs.writeFileSync(cPath, cCode);
+
+    modules[cPath] = css.values;
+  }
+}
+
+function onCreateOrUpdateStyleFileFromScript (sPath: string, buildable: boolean = false)
+{
+  const eName = evaluator.getConst(sPath, 'entry');
+  const eCSS = evaluator.getConst(sPath, 'default');
+  
+  if (!eCSS || typeof eCSS !== 'object' || Object.keys(eCSS).length === 0)
+  {
+    return;
+  }
+
+  const css = eCSS as CSSCollection;
+
+  if (typeof eName === 'string' && eName?.length > 0)
+  {
+    if (!globals[eName])
+    {
+      globals[eName] = {};
+    }
+
+    globals[eName][sPath] = css.values;
+    globalPaths[sPath] = eName;
+
+    console.log('[collect]', sPath);
+
+    if (buildable && entries[eName])
+    {
+      createCSSFile(eName);
     }
   }
   else
@@ -296,19 +385,19 @@ function onDeleteStyleFile (sPath: string, buildable: boolean = false)
 
   if (globalPaths[sPath])
   {
-    const entry = globalPaths[sPath];
+    const eName = globalPaths[sPath];
 
     delete globalPaths[sPath];
 
     console.log('[release]', sPath);
 
-    if (globals[entry])
+    if (globals[eName])
     {
-      delete globals[entry][sPath];
+      delete globals[eName][sPath];
 
-      if (buildable && entries[entry])
+      if (buildable && entries[eName])
       {
-        createCSSFile(entries[entry]);
+        createCSSFile(eName);
       }
     }
   }
@@ -336,15 +425,18 @@ function onCreateOrUpdateFile (fPath: string, buildable: boolean = false)
 
   setChanged(fPath);
 
-  if (entryPaths.includes(fPath))
+  for (const eName in entries)
   {
-    releaseEntryDependencies(fPath);
-    collectEntryDependencies(fPath);
+    if (entries[eName].includes(fPath))
+    {
+      releaseEntryDependencies(fPath);
+      collectEntryDependencies(fPath);
+    }
   }
 
   if (buildable)
   {
-    createCSSFiles(fPath);
+    createCSSFileFromDependency(fPath);
   }
 }
 
@@ -352,31 +444,51 @@ function onDeleteFile (fPath: string)
 {
   setChanged(fPath);
 
-  if (entryPaths.includes(fPath))
+  for (const eName in entries)
   {
-    releaseEntryDependencies(fPath);
+    if (entries[eName].includes(fPath))
+    {
+      releaseEntryDependencies(fPath);
+    }
   }
 
-  createCSSFiles(fPath);
+  createCSSFileFromDependency(fPath);
 }
 
-function createCSSFiles (dPath: string)
+function createCSSFileFromDependency (dPath: string)
 {
   const entryPaths = dependencyReverses[dPath];
 
   if (Array.isArray(entryPaths) && entryPaths.length > 0)
   {
-    for (const ePath of entryPaths)
+    const eNames: string[] = [];
+
+    for (const eName in entries)
     {
-      createCSSFile(ePath);
+      const ePaths = entries[eName];
+
+      for (const ePath of entryPaths)
+      {
+        if (ePaths.includes(ePath))
+        {
+          eNames.push(eName);
+          break;
+        }
+      }
+    }
+
+    for (const eName of eNames)
+    {
+      createCSSFile(eName);  
     }
   }
 }
 
-function createCSSFile (ePath: string)
+function createCSSFile (eName: string)
 {
-  const eName = entryReverses[ePath];
-  const dPaths = dependencies[ePath];
+  const ePaths = entries[eName];
+  // const eName = entryReverses[ePath];
+  // const dPaths = dependencies[ePath];
 
   const merges: CSSValues[] = [];
 
@@ -388,11 +500,14 @@ function createCSSFile (ePath: string)
     }
   }
 
-  for (const dPath of dPaths)
+  for (const ePath of ePaths)
   {
-    if (modules[dPath])
+    for (const dPath of dependencies[ePath])
     {
-      merges.push(modules[dPath]);
+      if (modules[dPath])
+      {
+        merges.push(modules[dPath]);
+      }
     }
   }
 

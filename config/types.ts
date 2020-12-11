@@ -12,7 +12,7 @@ export interface CSSConfigInput {
     css: {
       dir: string;
       entries: {
-        [name: string]: string;
+        [name: string]: string[];
       }
     };
   };
@@ -34,7 +34,7 @@ export interface CSSConfig {
     css: {
       dir: string;
       entries: {
-        [name: string]: string;
+        [name: string]: string[];
       }
     };
   };

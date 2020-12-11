@@ -6,10 +6,10 @@ export interface CSSObject {
   [name: string]: string | CSSObject;
 }
 
-export interface CSSCollections {
-  modules: Generic<CSSSlugs>;
-  values: CSSValues;
-}
+// export interface CSSCollections {
+//   modules: Generic<CSSSlugs>;
+//   values: CSSValues;
+// }
 
 export interface CSSCollection {
   slugs: CSSSlugs;
