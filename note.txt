@@ -1,0 +1,2 @@
+git tag -d `git tag -l 'v0.0.???'`
+git push --delete origin `git tag -l 'v0.0.???'`
