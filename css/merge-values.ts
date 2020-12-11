@@ -48,7 +48,7 @@ function merge (src: CSSValues, dst: CSSValues)
   }
 }
 
-const indices = [ '{ ', '@p', '@m', '@s' ];
+const indices = [ ':r', '@p', '@m', '@s' ];
 
 function sortKeys (keys: string[])
 {

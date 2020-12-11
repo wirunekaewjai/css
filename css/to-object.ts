@@ -1,4 +1,4 @@
-import { CSSObject } from '../types';
+import { CSSObject } from './types';
 
 function parse (css: string)
 {

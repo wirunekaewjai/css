@@ -3,6 +3,8 @@ import glob from 'glob';
 import path from 'path';
 import fs from 'fs';
 
+import * as hasha from 'hasha';
+
 import { CSSCollection, CSSValues, CSSValue, Generic } from '../../../css/types';
 import { CSSConfig } from '../../../config/types';
 
@@ -18,9 +20,14 @@ interface Dependencies {
 
 let config: CSSConfig;
 
+let hashes: Generic<string>;
+
 let entries: Generic<string>;
 let entryReverses: Generic<string>;
 let entryPaths: string[];
+
+let globals: Generic<Generic<CSSValues>>;
+let globalPaths: Generic<string>;
 
 let modules: Generic<CSSValues>;
 
@@ -41,6 +48,8 @@ function init ($config: CSSConfig)
   
   config = $config;
 
+  hashes = {};
+
   entries = config.out.css.entries;
   entryReverses = {};
   entryPaths = Object.values(entries);
@@ -52,6 +61,9 @@ function init ($config: CSSConfig)
 
   modules = {};
 
+  globals = {};
+  globalPaths = {};
+
   dependencies = {};
   dependencyReverses = {};
 
@@ -60,7 +72,8 @@ function init ($config: CSSConfig)
   incremental.reset();
 
   collectEntriesDependencies(entryPaths);
-  collectStyles();
+  // collectStyles();
+  collectFiles();
 }
 
 function build ()
@@ -73,6 +86,8 @@ function build ()
 
 function watch ()
 {
+  build();
+
   const pattern = path.join(config.source.dir, '/**');
   const watcher = chokidar.watch(pattern);
 
@@ -80,11 +95,11 @@ function watch ()
   {
     if (filePath.endsWith(config.source.ext))
     {
-      onCreateOrUpdateStyleFile(filePath);
+      onCreateOrUpdateStyleFile(filePath, true);
     }
-    else if (filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx'))
+    else if (isScript(filePath))
     {
-      onCreateOrUpdateFile(filePath);
+      onCreateOrUpdateFile(filePath, true);
     }
   });
 
@@ -92,11 +107,11 @@ function watch ()
   {
     if (filePath.endsWith(config.source.ext))
     {
-      onCreateOrUpdateStyleFile(filePath);
+      onCreateOrUpdateStyleFile(filePath, true);
     }
-    else if (filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx'))
+    else if (isScript(filePath))
     {
-      onCreateOrUpdateFile(filePath);
+      onCreateOrUpdateFile(filePath, true);
     }
   });
 
@@ -104,9 +119,9 @@ function watch ()
   {
     if (filePath.endsWith(config.source.ext))
     {
-      onDeleteStyleFile(filePath);
+      onDeleteStyleFile(filePath, true);
     }
-    else if (filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx'))
+    else if (isScript(filePath))
     {
       onDeleteFile(filePath);
     }
@@ -115,11 +130,16 @@ function watch ()
   watchers.push(watcher);
 }
 
+function isScript (filePath: string)
+{
+  return filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx');
+}
+
 function collectEntriesDependencies (ePaths: string[])
 {
   for (const ePath of ePaths)
   {
-    collectEntryDependencies(ePath);  
+    collectEntryDependencies(ePath);
   }
 }
 
@@ -161,65 +181,177 @@ function releaseEntryDependencies (ePath: string)
   }
 }
 
-function collectStyles ()
+function collectFiles ()
 {
-  const sPattern = path.join(config.source.dir, '/**', '/*' + config.source.ext);
-  const sPaths = glob.sync(sPattern);
+  const fPattern = path.join(config.source.dir, '/**');
+  const fPaths = glob.sync(fPattern);
 
-  for (const sPath of sPaths)
+  for (const filePath of fPaths)
   {
-    onCreateOrUpdateStyleFile(sPath);
+    if (filePath.endsWith(config.source.ext))
+    {
+      onCreateOrUpdateStyleFile(filePath, false);
+    }
+    else if (isScript(filePath))
+    {
+      onCreateOrUpdateFile(filePath, false);
+    }
   }
 }
 
-function onCreateOrUpdateStyleFile (sPath: string)
+function hasChanged (fPath: string)
 {
-  const css = (evaluator.getConst(sPath, 'default') ?? {}) as CSSCollection;
-  const mods = createCSSModule(css.slugs);
-
-  const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
-  const cCode = `const names = ${JSON.stringify(mods, null, 2)};\n\nexport default names;`;
-
-  if (!fs.existsSync(cPath))
+  if (!fs.existsSync(fPath))
   {
-    console.log('[create]', cPath);
+    return false;
+  }
+
+  if (!hashes[fPath])
+  {
+    return true;
+  }
+
+  const hash = hasha.fromFileSync(fPath, { algorithm: 'sha1' }) ?? '';
+  return hashes[fPath] !== hash;
+}
+
+function setChanged (fPath: string)
+{
+  if (!fs.existsSync(fPath) && hashes[fPath])
+  {
+    delete hashes[fPath];
+  }
+
+  if (fs.existsSync(fPath))
+  {
+    const hash = hasha.fromFileSync(fPath, { algorithm: 'sha1' });
+
+    if (hash)
+    {
+      hashes[fPath] = hash;
+    }
+  }
+}
+
+function onCreateOrUpdateStyleFile (sPath: string, buildable: boolean = false)
+{
+  if (!hasChanged(sPath))
+  {
+    // console.log('[skip]', sPath);
+    return;
+  }
+
+  setChanged(sPath);
+
+  const entry = evaluator.getConst(sPath, 'entry');
+  const css = (evaluator.getConst(sPath, 'default') ?? {}) as CSSCollection;
+
+  if (!css || Object.keys(css).length === 0)
+  {
+    return;
+  }
+
+  if (typeof entry === 'string' && entry?.length > 0)
+  {
+    if (!globals[entry])
+    {
+      globals[entry] = {};
+    }
+
+    globals[entry][sPath] = css.values;
+    globalPaths[sPath] = entry;
+
+    console.log('[collect]', sPath);
+
+    if (buildable && entries[entry])
+    {
+      createCSSFile(entries[entry]);
+    }
   }
   else
   {
-    console.log('[update]', cPath);
+    const mods = createCSSModule(css.slugs);
+
+    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+    const cCode = `const names = ${JSON.stringify(mods, null, 2)};\n\nexport default names;`;
+
+    if (!fs.existsSync(cPath))
+    {
+      console.log('[create]', cPath);
+    }
+    else
+    {
+      console.log('[update]', cPath);
+    }
+
+    fs.writeFileSync(cPath, cCode);
+
+    modules[cPath] = css.values;
   }
-
-  fs.writeFileSync(cPath, cCode);
-
-  modules[cPath] = css.values;
 }
 
-function onDeleteStyleFile (sPath: string)
+function onDeleteStyleFile (sPath: string, buildable: boolean = false)
 {
-  const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
-  
-  if (fs.existsSync(cPath))
+  setChanged(sPath);
+
+  if (globalPaths[sPath])
   {
-    fs.unlinkSync(cPath);
-    console.log('[delete]', cPath);
-  }
+    const entry = globalPaths[sPath];
 
-  delete modules[cPath];
+    delete globalPaths[sPath];
+
+    console.log('[release]', sPath);
+
+    if (globals[entry])
+    {
+      delete globals[entry][sPath];
+
+      if (buildable && entries[entry])
+      {
+        createCSSFile(entries[entry]);
+      }
+    }
+  }
+  else
+  {
+    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+  
+    if (fs.existsSync(cPath))
+    {
+      fs.unlinkSync(cPath);
+      console.log('[delete]', cPath);
+    }
+
+    delete modules[cPath];
+  }
 }
 
-function onCreateOrUpdateFile (fPath: string)
+function onCreateOrUpdateFile (fPath: string, buildable: boolean = false)
 {
+  if (!hasChanged(fPath))
+  {
+    // console.log('[skip]', fPath);
+    return;
+  }
+
+  setChanged(fPath);
+
   if (entryPaths.includes(fPath))
   {
     releaseEntryDependencies(fPath);
     collectEntryDependencies(fPath);
   }
 
-  createCSSFiles(fPath);
+  if (buildable)
+  {
+    createCSSFiles(fPath);
+  }
 }
 
 function onDeleteFile (fPath: string)
 {
+  setChanged(fPath);
+
   if (entryPaths.includes(fPath))
   {
     releaseEntryDependencies(fPath);
@@ -248,6 +380,14 @@ function createCSSFile (ePath: string)
 
   const merges: CSSValues[] = [];
 
+  if (globals[eName])
+  {
+    for (const sPath in globals[eName])
+    {
+      merges.push(globals[eName][sPath]);
+    }
+  }
+
   for (const dPath of dPaths)
   {
     if (modules[dPath])
@@ -265,11 +405,24 @@ function createCSSFile (ePath: string)
   }
   else
   {
+    const cCodeOld = fs.readFileSync(cOut).toString('utf8');
+
+    if (cCodeOld === cCode)
+    {
+      // console.log('[skip]', cOut);
+      return;
+    }
+
     console.log('[update]', cOut);
   }
 
   fs.writeFileSync(cOut, cCode);
 }
+
+const selectorIndices: Generic<number> = {
+  ':': 0,
+  '.': 2,
+};
 
 function sortCSSSelectors (selectors: string[])
 {
@@ -280,8 +433,8 @@ function sortCSSSelectors (selectors: string[])
       return a.localeCompare(b);
     }
 
-    const ai = a[0] === '.' ? 0 : 1;
-    const bi = b[0] === '.' ? 0 : 1;
+    const ai = selectorIndices[a[0]] ?? 1;
+    const bi = selectorIndices[b[0]] ?? 1;
 
     return ai - bi;
   });
