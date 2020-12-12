@@ -22,12 +22,6 @@ export default function create (input?: CSSConfigInput)
       },
     },
 
-    includes: Array.from(
-      new Set([
-        ...(input?.includes ?? []).filter(e => !!e),
-      ]),
-    ),
-
     externals: Array.from(
       new Set([
         ...(input?.externals ?? []).filter(e => !!e),

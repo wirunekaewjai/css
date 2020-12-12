@@ -3,6 +3,8 @@ import glob from 'glob';
 import path from 'path';
 import fs from 'fs';
 
+import sass from 'sass';
+
 import * as hasha from 'hasha';
 
 import { CSSCollection, CSSValues, CSSValue, Generic } from '../../../css/types';
@@ -261,7 +263,7 @@ function onCreateOrUpdateStyleFile (sPath: string, buildable: boolean = false)
 
   setChanged(sPath);
 
-  if (sPath.endsWith('.css'))
+  if (sPath.endsWith('.scss') || sPath.endsWith('.css'))
   {
     onCreateOrUpdateStyleFileFromCSS(sPath, buildable);
   }
@@ -291,11 +293,21 @@ function onCreateOrUpdateStyleFileFromCSS (sPath: string, buildable: boolean = f
     return undefined;
   }
 
-  const cssCode = fs.readFileSync(sPath).toString('utf8');
+  let cssCode = fs.readFileSync(sPath).toString('utf8');
 
   if (!cssCode || cssCode?.trim()?.length === 0)
   {
     return;
+  }
+
+  if (sPath.endsWith('.scss'))
+  {
+    cssCode = sass.renderSync({ data: cssCode })?.css?.toString('utf8');
+
+    if (!cssCode || cssCode?.trim()?.length === 0)
+    {
+      return;
+    }
   }
 
   const eName = getEntryName(cssCode);
@@ -502,13 +514,13 @@ function createCSSFile (eName: string)
 
   const merges: CSSValues[] = [];
 
-  if (config.includes.includes('variables'))
-  {
-    const md = require('../../../css/include-variables');
-    const vars = md.default as CSSCollection;
+  // if (config.includes.includes('variables'))
+  // {
+  //   const md = require('../../../css/include-variables');
+  //   const vars = md.default as CSSCollection;
 
-    merges.push(vars.values);
-  }
+  //   merges.push(vars.values);
+  // }
 
   if (globals[eName])
   {
