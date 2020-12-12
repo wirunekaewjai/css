@@ -25,6 +25,7 @@ let hashes: Generic<string>;
 
 let entries: Generic<string[]>;
 let entryReverses: Generic<string>;
+let entryOuts: string[];
 
 let globals: Generic<Generic<CSSValues>>;
 let globalPaths: Generic<string>;
@@ -52,6 +53,7 @@ function init ($config: CSSConfig)
 
   entries = config.out.css.entries;
   entryReverses = {};
+  entryOuts = Object.keys(entries).map(eName => path.join(config.out.css.dir, eName + '.css'));
 
   for (const eName in entries)
   {
@@ -96,7 +98,7 @@ function watch ()
 
   watcher.on('add', (filePath) =>
   {
-    if (filePath.endsWith(config.source.ext))
+    if (isSource(filePath))
     {
       onCreateOrUpdateStyleFile(filePath, true);
     }
@@ -108,7 +110,7 @@ function watch ()
 
   watcher.on('change', (filePath) =>
   {
-    if (filePath.endsWith(config.source.ext))
+    if (isSource(filePath))
     {
       onCreateOrUpdateStyleFile(filePath, true);
     }
@@ -120,7 +122,7 @@ function watch ()
 
   watcher.on('unlink', (filePath) =>
   {
-    if (filePath.endsWith(config.source.ext))
+    if (isSource(filePath))
     {
       onDeleteStyleFile(filePath, true);
     }
@@ -131,6 +133,11 @@ function watch ()
   });
 
   watchers.push(watcher);
+}
+
+function isSource (filePath: string)
+{
+  return filePath.endsWith(config.source.ext) && !entryOuts.includes(filePath); 
 }
 
 function isScript (filePath: string)
@@ -194,7 +201,7 @@ function collectFiles ()
 
   for (const filePath of fPaths)
   {
-    if (filePath.endsWith(config.source.ext))
+    if (isSource(filePath))
     {
       onCreateOrUpdateStyleFile(filePath, false);
     }
@@ -534,22 +541,63 @@ function createCSSFile (eName: string)
   fs.writeFileSync(cOut, cCode);
 }
 
-const selectorIndices: Generic<number> = {
-  ':': 0,
-  '.': 2,
-};
+function getIndex (text: string)
+{
+  if (text.startsWith('@import'))
+  {
+    return 0;
+  }
+  else if (text.startsWith(':root'))
+  {
+    return 1;
+  }
+  else if (text.startsWith('*'))
+  {
+    return 2;
+  }
+  else if (text.startsWith('html'))
+  {
+    return 3.1;
+  }
+  else if (text.startsWith('body'))
+  {
+    return 3.2;
+  }
+  else if (text.startsWith('#'))
+  {
+    return 4.1;
+  }
+  else if (text.startsWith('.'))
+  {
+    return 4.2;
+  }
+  else if (text.startsWith('@page'))
+  {
+    return 5.1;
+  }
+  else if (text.startsWith('@media'))
+  {
+    return 5.2;
+  }
+  else if (text.startsWith('@supports'))
+  {
+    return 5.3;
+  }
+
+  return 3.3;
+}
 
 function sortCSSSelectors (selectors: string[])
 {
   return selectors.sort((a, b) =>
   {
-    if (a[0] === b[0])
+    const ai = getIndex(a);
+    const bi = getIndex(b);
+
+    if (ai === bi)
     {
       return a.localeCompare(b);
     }
-
-    const ai = selectorIndices[a[0]] ?? 1;
-    const bi = selectorIndices[b[0]] ?? 1;
 
     return ai - bi;
   });
@@ -608,7 +656,7 @@ function createCSSSourceCode (values: CSSValues)
     }
   }
 
-  return join(dst, ' ');
+  return join(sortCSSSelectors(dst), ' ');
 }
 
 export default {
