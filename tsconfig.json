@@ -66,6 +66,7 @@
   "compileOnSave": true,
   "include": [
     "bin",
-    "builder"
+    "config",
+    "css"
   ]
 }
