@@ -1,9 +1,10 @@
 import fs from 'fs';
-import { defaultConfig } from '../consts';
+import { defaultConfigName } from '../consts';
 
 export default function run ()
 {
-  const path = defaultConfig;
+  const ext = fs.existsSync('tsconfig.json') ? '.ts' : '.js';
+  const path = defaultConfigName + ext;
 
   if (fs.existsSync(path))
   {

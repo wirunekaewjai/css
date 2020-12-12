@@ -4,7 +4,7 @@ import c from '@wirunekaewjai/css/config';
 export default c({
   source: {
     dir: 'src',
-    ext: '.s.ts',
+    ext: '.css',
   },
 
   out: {
@@ -15,9 +15,15 @@ export default c({
     css: {
       dir: 'src',
       entries: {
-        'home': 'src/index.tsx',
+        'home': [
+          'src/index.tsx',
+        ],
       },
     },
   },
+
+  includes: [
+    'variables',
+  ],
 });
 `.trim();

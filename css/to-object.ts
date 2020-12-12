@@ -1,5 +1,40 @@
 import { CSSObject } from './types';
 
+function collectQuotes (src: string)
+{
+  const quotes: Array<[number, number]> = [];
+  let curr: number[] = [];
+
+  src.replace(/'.+'|".+"/g, (txt, startAt) =>
+  {
+    const key = txt.startsWith('"') ? '"' : "'";
+
+    for (let i = 0; i < txt.length; i++)
+    {
+      const c = txt[i];
+
+      if (c === key)
+      {
+        if (i === 0 || txt[i - 1] !== '\\')
+        {
+          curr.push(startAt + i);
+
+          if (curr.length === 2)
+          {
+            quotes.push([curr[0], curr[1]]);
+            curr = [];
+          }
+        }
+      }
+    }
+
+    // quotes.push([i, i + c.length - 1]);
+    return txt;
+  });
+
+  return quotes;
+}
+
 function parse (css: string)
 {
   function isQuote (quotes: Array<[number, number]>, i: number)
@@ -30,14 +65,8 @@ function parse (css: string)
 
   function readProperties (text: string, parent: CSSObject)
   {
-    const quotes: Array<[number, number]> = [];
+    const quotes = collectQuotes(text);
     const tokens: string[] = [];
-
-    text.replace(/'.+'|".+"/g, (c, i) =>
-    {
-      quotes.push([i, i + c.length - 1]);
-      return c;
-    });
 
     let offset = 0;
 
@@ -68,14 +97,8 @@ function parse (css: string)
 
   function readNames (text: string)
   {
-    const quotes: Array<[number, number]> = [];
+    const quotes = collectQuotes(text);
     const tokens: string[] = [];
-
-    text.replace(/'.+'|".+"/g, (c, i) =>
-    {
-      quotes.push([i, i + c.length - 1]);
-      return c;
-    });
 
     let offset = 0;
 
@@ -102,13 +125,7 @@ function parse (css: string)
 
   function readSelectors (text: string)
   {
-    const quotes: Array<[number, number]> = [];
-
-    text.replace(/'.+'|".+"/g, (c, i) =>
-    {
-      quotes.push([i, i + c.length - 1]);
-      return c;
-    });
+    const quotes = collectQuotes(text);
 
     function readCommentEnd (startAt: number)
     {
@@ -173,12 +190,12 @@ function parse (css: string)
         }
         else
         {
-          const q = getQuote(quotes, i);
+          // const q = getQuote(quotes, i);
 
-          if (q && q === c)
-          {
-            token += '\\';
-          }
+          // if (q && q === c)
+          // {
+          //   token += '\\';
+          // }
 
           token += c;
           i++;

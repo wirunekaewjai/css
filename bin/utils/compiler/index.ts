@@ -502,6 +502,14 @@ function createCSSFile (eName: string)
 
   const merges: CSSValues[] = [];
 
+  if (config.includes.includes('variables'))
+  {
+    const md = require('../../../css/include-variables');
+    const vars = md.default as CSSCollection;
+
+    merges.push(vars.values);
+  }
+
   if (globals[eName])
   {
     for (const sPath in globals[eName])

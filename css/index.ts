@@ -1,4 +1,5 @@
 import collect from './collect';
+// import collectImport from './collect-import';
 
 import toObject from './to-object';
 import toSource from './to-source';

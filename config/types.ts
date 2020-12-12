@@ -1,3 +1,6 @@
+
+type Include = 'variables';
+
 export interface CSSConfigInput {
   source: {
     dir: string;
@@ -17,6 +20,7 @@ export interface CSSConfigInput {
     };
   };
 
+  includes?: Include[];
   externals?: string[];
 }
 
@@ -39,5 +43,6 @@ export interface CSSConfig {
     };
   };
 
+  includes: Include[];
   externals: string[];
 }
