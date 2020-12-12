@@ -10,7 +10,12 @@ import { CSSConfig } from '../../../config/types';
 
 import { cssFromString } from '../../../css';
 import { join, distinct } from '../../../css/array';
+
+import mergeTags from '../../../css/merge-tags';
 import mergeValues from '../../../css/merge-values';
+import purgeVars from '../../../css/purge-vars';
+
+import sortSelectors from '../../../css/sort-selectors';
 
 import evaluator from '../evaluator';
 import incremental from '../incremental';
@@ -494,8 +499,6 @@ function createCSSFileFromDependency (dPath: string)
 function createCSSFile (eName: string)
 {
   const ePaths = entries[eName];
-  // const eName = entryReverses[ePath];
-  // const dPaths = dependencies[ePath];
 
   const merges: CSSValues[] = [];
 
@@ -519,7 +522,13 @@ function createCSSFile (eName: string)
   }
 
   const cOut = path.join(config.out.css.dir, eName + '.css');
-  const cCode = createCSSSourceCode(mergeValues(merges));
+  const cCode = createCSSSourceCode(
+    mergeTags(
+      purgeVars(
+        mergeValues(merges)
+      )
+    )
+  );
 
   if (!fs.existsSync(cOut))
   {
@@ -539,68 +548,6 @@ function createCSSFile (eName: string)
   }
 
   fs.writeFileSync(cOut, cCode);
-}
-
-function getIndex (text: string)
-{
-  if (text.startsWith('@import'))
-  {
-    return 0;
-  }
-  else if (text.startsWith(':root'))
-  {
-    return 1;
-  }
-  else if (text.startsWith('*'))
-  {
-    return 2;
-  }
-  else if (text.startsWith('html'))
-  {
-    return 3.1;
-  }
-  else if (text.startsWith('body'))
-  {
-    return 3.2;
-  }
-  else if (text.startsWith('#'))
-  {
-    return 4.1;
-  }
-  else if (text.startsWith('.'))
-  {
-    return 4.2;
-  }
-  else if (text.startsWith('@page'))
-  {
-    return 5.1;
-  }
-  else if (text.startsWith('@media'))
-  {
-    return 5.2;
-  }
-  else if (text.startsWith('@supports'))
-  {
-    return 5.3;
-  }
-
-  return 3.3;
-}
-
-function sortCSSSelectors (selectors: string[])
-{
-  return selectors.sort((a, b) =>
-  {
-    const ai = getIndex(a);
-    const bi = getIndex(b);
-
-    if (ai === bi)
-    {
-      return a.localeCompare(b);
-    }
-
-    return ai - bi;
-  });
 }
 
 function createCSSModule (module: Generic<string[]>)
@@ -649,14 +596,14 @@ function createCSSSourceCode (values: CSSValues)
         return join([e.name, e.selector], '');
       });
 
-      const selector = join(distinct(sortCSSSelectors(selectors)), `, `);
+      const selector = join(distinct(sortSelectors(selectors)), `, `);
       const element = `${selector} { ${key} }`;
 
       dst.push(element);
     }
   }
 
-  return join(sortCSSSelectors(dst), ' ');
+  return join(sortSelectors(dst), ' ');
 }
 
 export default {
