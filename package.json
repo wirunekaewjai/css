@@ -1,9 +1,10 @@
 {
   "name": "@wirunekaewjai/css",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "",
   "main": "index.ts",
   "scripts": {
+    "build:presets": "ts-node build-presets.ts",
     "deploy:minor": "yarn publish --access public --minor --tag latest --tag dev",
     "deploy": "yarn publish --access public --patch --tag dev"
   },
