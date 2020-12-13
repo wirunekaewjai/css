@@ -142,9 +142,33 @@ function watch ()
   watchers.push(watcher);
 }
 
+function getSourceExtension (filePath: string)
+{
+  for (const ext of config.source.exts)
+  {
+    if (filePath.endsWith(ext))
+    {
+      return ext;
+    }
+  }
+
+  const arr1 = filePath.split('/');
+  const arr2 = arr1[arr1.length - 1].split('.');
+
+  return arr2[arr2.length - 1];
+}
+
 function isSource (filePath: string)
 {
-  return filePath.endsWith(config.source.ext) && !entryOuts.includes(filePath); 
+  for (const ext of config.source.exts)
+  {
+    if (filePath.endsWith(ext))
+    {
+      return !entryOuts.includes(filePath);
+    }
+  }
+
+  return false;
 }
 
 function isScript (filePath: string)
@@ -300,6 +324,8 @@ function onCreateOrUpdateStyleFileFromCSS (sPath: string, buildable: boolean = f
     return;
   }
 
+  const eName = getEntryName(cssCode);
+  
   if (sPath.endsWith('.scss'))
   {
     cssCode = sass.renderSync({ data: cssCode })?.css?.toString('utf8');
@@ -310,7 +336,6 @@ function onCreateOrUpdateStyleFileFromCSS (sPath: string, buildable: boolean = f
     }
   }
 
-  const eName = getEntryName(cssCode);
   const css = cssFromString(cssCode);
 
   if (typeof eName === 'string' && eName.length > 0)
@@ -334,7 +359,8 @@ function onCreateOrUpdateStyleFileFromCSS (sPath: string, buildable: boolean = f
   {
     const mods = createCSSModule(css.slugs);
 
-    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+    const cExt = getSourceExtension(sPath);
+    const cPath = sPath.replace(cExt, config.out.classes.ext);
     const cCode = `const names = ${JSON.stringify(mods, null, 2)};\n\nexport default names;`;
 
     if (!fs.existsSync(cPath))
@@ -385,7 +411,8 @@ function onCreateOrUpdateStyleFileFromScript (sPath: string, buildable: boolean 
   {
     const mods = createCSSModule(css.slugs);
 
-    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+    const cExt = getSourceExtension(sPath);
+    const cPath = sPath.replace(cExt, config.out.classes.ext);
     const cCode = `const names = ${JSON.stringify(mods, null, 2)};\n\nexport default names;`;
 
     if (!fs.existsSync(cPath))
@@ -427,7 +454,8 @@ function onDeleteStyleFile (sPath: string, buildable: boolean = false)
   }
   else
   {
-    const cPath = sPath.replace(config.source.ext, config.out.classes.ext);
+    const cExt = getSourceExtension(sPath);
+    const cPath = sPath.replace(cExt, config.out.classes.ext);
   
     if (fs.existsSync(cPath))
     {
@@ -511,16 +539,7 @@ function createCSSFileFromDependency (dPath: string)
 function createCSSFile (eName: string)
 {
   const ePaths = entries[eName];
-
   const merges: CSSValues[] = [];
-
-  // if (config.includes.includes('variables'))
-  // {
-  //   const md = require('../../../css/include-variables');
-  //   const vars = md.default as CSSCollection;
-
-  //   merges.push(vars.values);
-  // }
 
   if (globals[eName])
   {

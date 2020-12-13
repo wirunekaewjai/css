@@ -2,7 +2,7 @@
 export interface CSSConfigInput {
   source: {
     dir: string;
-    ext?: string;
+    exts?: string[];
   };
 
   out: {
@@ -24,7 +24,7 @@ export interface CSSConfigInput {
 export interface CSSConfig {
   source: {
     dir: string;
-    ext: string;
+    exts: string[];
   };
 
   out: {

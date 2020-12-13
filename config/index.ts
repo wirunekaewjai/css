@@ -8,7 +8,7 @@ export default function create (input?: CSSConfigInput)
   const out: CSSConfig = {
     source: {
       dir: input?.source.dir ?? 'src',
-      ext: input?.source.ext ?? '.s.ts',
+      exts: input?.source.exts ?? ['.scss'],
     },
     
     out: {
