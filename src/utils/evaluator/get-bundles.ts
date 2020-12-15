@@ -11,7 +11,7 @@ export default function evaluate (file: string, externals?: string[])
 
   const paths: string[] = [];
 
-  code.replace(/(\/\/\s).*(.ts|.js)/g, (a) =>
+  code.replace(/(\/\/\s).*(.ts|.js|.tsx|.jsx)/g, (a) =>
   {
     paths.push(a.slice(3));
     return a;

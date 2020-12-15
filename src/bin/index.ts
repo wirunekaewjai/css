@@ -1,9 +1,9 @@
 #!/usr/bin/env ts-node-script
 import yargs from 'yargs/yargs';
 
-import init from './init';
-import dev from './dev';
-import build from './build';
+// import init from './init';
+// import dev from './dev';
+// import build from './build';
 
 const cli = yargs(process.argv.slice(2))
   .command('init', 'initialize css config file')

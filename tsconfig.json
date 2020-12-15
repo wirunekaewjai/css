@@ -65,8 +65,6 @@
   },
   "compileOnSave": true,
   "include": [
-    "bin",
-    "config",
-    "css"
+    "src"
   ]
 }
