@@ -1,12 +1,12 @@
 {
   "name": "@wirunekaewjai/css",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "",
   "main": "index.ts",
   "scripts": {
-    "build:presets": "ts-node build-presets.ts",
-    "deploy:minor": "yarn publish --access public --minor --tag latest --tag dev",
-    "deploy": "yarn publish --access public --patch --tag dev"
+    "build": "rimraf lib && tsc",
+    "deploy:minor": "yarn build && yarn publish --access public --minor --tag latest --tag dev",
+    "deploy": "yarn build && yarn publish --access public --patch --tag dev"
   },
   "repository": {
     "type": "git",
@@ -38,6 +38,6 @@
     "yargs": "^16.1.1"
   },
   "bin": {
-    "wkcss": "bin/index.ts"
+    "wkcss": "lib/bin/index.js"
   }
 }
