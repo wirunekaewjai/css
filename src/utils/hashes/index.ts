@@ -6,6 +6,14 @@ import { Hashmap } from './types';
 class Hashes {
   map: Hashmap = {};
 
+  // init ()
+  // {
+  //   for (const filePath in this.map)
+  //   {
+  //     this.setChanged(filePath);
+  //   }
+  // }
+
   hasChanged (filePath: string)
   {
     if (!fs.existsSync(filePath))
