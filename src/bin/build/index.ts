@@ -11,8 +11,8 @@ import Incremental from '../utils/incremental';
 
 import array from '../utils/array';
 
-import { Stylesheet, Supports, Media, Keyframes, Rule, Comment } from '../utils/css/parse/types';
-import { Config } from '../config/types';
+import { Stylesheet, Supports, Media, Keyframes, Rule, Comment } from '../../utils/css/parse/types';
+import { Config } from '../../config/types';
 import { Args, Generic, Styles } from './types';
 
 let config: Config;

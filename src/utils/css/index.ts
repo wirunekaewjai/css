@@ -1,4 +1,4 @@
-import parseCSS from './src/utils/css/parse';
+import parseCSS from './parse';
 
 function css (css: TemplateStringsArray, ...values: unknown[])
 {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import yargs from 'yargs/yargs';
 
-import init from '../init';
-import build from '../build';
+import init from './init';
+import build from './build';
 
 const cli = yargs(process.argv.slice(2))
   .command('init', 'initialize css config file')
