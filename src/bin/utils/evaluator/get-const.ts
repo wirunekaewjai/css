@@ -5,7 +5,7 @@ import fs from 'fs';
 
 import getCode from './get-code';
 
-export default function evaluate (file: string, name: string, externals?: string[])
+export default function evaluate (file: string, field: string, externals?: string[])
 {
   const code = getCode(file, externals);
 
@@ -22,7 +22,7 @@ export default function evaluate (file: string, name: string, externals?: string
   try
   {
     const module = require(moduleID);
-    const data = module[name];
+    const data = module[field];
 
     fs.unlinkSync(modulePath);
 

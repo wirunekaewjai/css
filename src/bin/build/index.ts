@@ -34,18 +34,20 @@ let localStyles: Generic<Styles>;
 
 export default function run (args: Args)
 {
+  const pkgPath = 'package.json';
+
   function initPackages ()
   {
     packages = [];
 
-    if (!fs.existsSync('package.json'))
+    if (!fs.existsSync(pkgPath))
     {
       return;
     }
 
     const includePackages = config.packages;
 
-    const file = fs.readFileSync('package.json')?.toString('utf8');
+    const file = fs.readFileSync(pkgPath)?.toString('utf8');
     const json = JSON.parse(file);
 
     if (json.dependencies && typeof json.dependencies === 'object')
@@ -93,7 +95,7 @@ export default function run (args: Args)
   {
     function watchPackages ()
     {
-      const watcher = chokidar.watch('package.json');
+      const watcher = chokidar.watch(pkgPath);
 
       watcher.on('change', () => 
       {
