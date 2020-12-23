@@ -43,6 +43,8 @@ export default function run (args: Args)
       return;
     }
 
+    const includePackages = config.packages;
+
     const file = fs.readFileSync('package.json')?.toString('utf8');
     const json = JSON.parse(file);
 
@@ -50,7 +52,10 @@ export default function run (args: Args)
     {
       for (const pck of Object.keys(json.dependencies))
       {
-        packages.push(pck);
+        if (!includePackages.includes(pck))
+        {
+          packages.push(pck);
+        }
       }
     }
 
@@ -58,7 +63,10 @@ export default function run (args: Args)
     {
       for (const pck of Object.keys(json.devDependencies))
       {
-        packages.push(pck);
+        if (!includePackages.includes(pck))
+        {
+          packages.push(pck);
+        }
       }
     }
   }
@@ -198,8 +206,8 @@ function build ()
 
 function watch ()
 {
-  const pattern = path.join(config.source.directory, '/**/*');
-  const watcher = chokidar.watch(pattern);
+  const patterns = config.sources.map(source => path.join(source.directory, '/**/*'));
+  const watcher = chokidar.watch(patterns);
 
   watcher.on('add', (filePath) =>
   {
@@ -252,9 +260,27 @@ function watch ()
   watchers.push(watcher);
 }
 
+function replaceModuleExtension (filePath: string)
+{
+  for (const extension of config.module.inputs)
+  {
+    if (filePath.endsWith(extension))
+    {
+      return filePath.replace(extension, config.module.output);
+    }
+  }
+
+  return filePath;
+}
+
 function isModulePath (filePath: string)
 {
-  return filePath.endsWith(config.module.input.extension);
+  for (const extension of config.module.inputs)
+  {
+    return filePath.endsWith(extension);
+  }
+
+  return false;
 }
 
 function isEntryPath (filePath: string)
@@ -269,15 +295,18 @@ function isCodePath (filePath: string)
 
 function collectFiles ()
 {
-  const pattern = path.join(config.source.directory, '/**/*');
-  const paths = glob.sync(pattern);
-
-  for (const filePath of paths)
+  for (const source of config.sources)
   {
-    if (isModulePath(filePath) || isEntryPath(filePath) || isCodePath(filePath))
+    const pattern = path.join(source.directory, '/**/*');
+    const paths = glob.sync(pattern);
+
+    for (const filePath of paths)
     {
-      hashes.setChanged(filePath);
-    }
+      if (isModulePath(filePath) || isEntryPath(filePath) || isCodePath(filePath))
+      {
+        hashes.setChanged(filePath);
+      }
+    }  
   }
 }
 
@@ -423,7 +452,7 @@ function deleteModuleFile (filePath: string)
   }
   else
   {
-    const outPath = filePath.replace(config.module.input.extension, config.module.output.extension);
+    const outPath = replaceModuleExtension(filePath);
 
     if (fs.existsSync(outPath))
     {
@@ -437,12 +466,18 @@ function deleteModuleFile (filePath: string)
 
 function buildModules ()
 {
-  const modulePattern = path.join(config.source.directory, '/**/*' + config.module.input.extension);
-  const modulePaths = glob.sync(modulePattern);
-
-  for (const modulePath of modulePaths)
+  for (const source of config.sources)
   {
-    buildModule(modulePath, false);
+    for (const moduleExtension of config.module.inputs)
+    {
+      const modulePattern = path.join(source.directory, '/**/*' + moduleExtension);
+      const modulePaths = glob.sync(modulePattern);
+
+      for (const modulePath of modulePaths)
+      {
+        buildModule(modulePath, false);
+      }
+    }
   }
 }
 
@@ -469,6 +504,19 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
   
   if (typeof data.entry === 'string' && data.entry?.length > 0)
   {
+    const outPath = replaceModuleExtension(filePath);
+
+    if (fs.existsSync(outPath))
+    {
+      fs.unlinkSync(outPath);
+      console.log('[delete]', outPath);
+    }
+
+    if (localStyles[outPath])
+    {
+      delete localStyles[outPath];
+    }
+
     const { styles } = parseGlobalStyle(data.default);
     const entryName = data.entry;;
 
@@ -490,21 +538,30 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
   else
   {
     const { modules, styles } = parseLocalStyle(data.default);
-
-    const outPath = filePath.replace(config.module.input.extension, config.module.output.extension);
-    const outData = `const names = ${JSON.stringify(modules, null, 2)};\n\nexport default names;`;
-
-    if (!fs.existsSync(outPath))
+    const outPath = replaceModuleExtension(filePath);
+    
+    if (Object.keys(modules).length === 0)
     {
-      console.log('[create]', outPath);
+      if (fs.existsSync(outPath))
+      {
+        fs.unlinkSync(outPath);
+        console.log('[delete]', outPath);
+      }
+
+      if (localStyles[outPath])
+      {
+        delete localStyles[outPath];
+      }
     }
     else
     {
-      console.log('[update]', outPath);
-    }
+      const outData = `const names = ${JSON.stringify(modules, null, 2)};\n\nexport default names;`;
 
-    fs.writeFileSync(outPath, outData);
-    localStyles[outPath] = styles;
+      fs.writeFileSync(outPath, outData);
+      localStyles[outPath] = styles;
+
+      console.log('[collect]', filePath);
+    }
   }
 }
 

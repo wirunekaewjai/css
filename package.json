@@ -19,7 +19,7 @@
     "url": "https://github.com/wirunekaewjai/css/issues"
   },
   "homepage": "https://github.com/wirunekaewjai/css#readme",
-  "dependencies": {
+  "devDpendencies": {
     "@types/chalk": "^2.2.0",
     "@types/fs-extra": "^9.0.5",
     "@types/glob": "^7.1.3",

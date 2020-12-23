@@ -3,17 +3,15 @@ import { Config } from './types';
 export default function create (input: Config)
 {
   const out: Config = {
-    source: {
-      directory: input.source.directory,
-    },
+    packages: input.packages,
+    sources: input.sources,
+    // source: {
+    //   directory: input.source.directory,
+    // },
 
     module: {
-      input: {
-        extension: input.module.input.extension,
-      },
-      output: {
-        extension: input.module.output.extension,
-      },
+      inputs: input.module.inputs,
+      output: input.module.output,
     },
 
     build: {

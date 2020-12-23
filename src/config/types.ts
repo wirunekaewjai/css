@@ -1,5 +1,6 @@
 export interface Config {
-  source: Source;
+  packages: string[];
+  sources: Source[];
   module: Module;
   build: Build;
 }
@@ -9,15 +10,11 @@ export interface Source {
 }
 
 export interface Module {
-  input: {
-    // .m.ts
-    extension: string;
-  };
+  // .m.ts
+  inputs: string[];
 
-  output: {
-    // .ts
-    extension: string;
-  };
+  // .ts
+  output: string;
 }
 
 export interface Build {
