@@ -1,6 +1,6 @@
 {
   "name": "@wirunekaewjai/css",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -19,7 +19,7 @@
     "url": "https://github.com/wirunekaewjai/css/issues"
   },
   "homepage": "https://github.com/wirunekaewjai/css#readme",
-  "devDpendencies": {
+  "dependencies": {
     "@types/chalk": "^2.2.0",
     "@types/fs-extra": "^9.0.5",
     "@types/glob": "^7.1.3",
