@@ -4,8 +4,6 @@ import path from 'path';
 import fs from 'fs';
 import fsx from 'fs-extra';
 
-// import postCSS from 'postcss';
-
 import evaluator from '../utils/evaluator';
 
 import Hashes from '../utils/hashes';
@@ -34,7 +32,7 @@ let globalStylePaths: Generic<string>;
 
 let localStyles: Generic<Styles>;
 
-export default async function run (args: Args)
+export default function run (args: Args)
 {
   const pkgPath = 'package.json';
 
@@ -120,7 +118,7 @@ export default async function run (args: Args)
         }
 
         init();
-        await build();
+        build();
         watch();
       });
 
@@ -150,7 +148,7 @@ export default async function run (args: Args)
   else
   {
     init();
-    await build();
+    build();
   }
 }
 
@@ -202,10 +200,10 @@ function init ()
   collectFiles();
 }
 
-async function build ()
+function build ()
 {
-  await buildModules();
-  await buildEntries();
+  buildModules();
+  buildEntries();
 }
 
 function watch ()
@@ -217,15 +215,15 @@ function watch ()
   {
     if (isModulePath(filePath))
     {
-      await updateModuleFile(filePath);
+      updateModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      await updateEntryFile(filePath);
+      updateEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      await updateCodeFile(filePath);
+      updateCodeFile(filePath);
     }
   });
 
@@ -233,15 +231,15 @@ function watch ()
   {
     if (isModulePath(filePath))
     {
-      await updateModuleFile(filePath);
+      updateModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      await updateEntryFile(filePath);
+      updateEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      await updateCodeFile(filePath);
+      updateCodeFile(filePath);
     }
   });
 
@@ -249,15 +247,15 @@ function watch ()
   {
     if (isModulePath(filePath))
     {
-      await deleteModuleFile(filePath);
+      deleteModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      await deleteEntryFile(filePath);
+      deleteEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      await deleteCodeFile(filePath);
+      deleteCodeFile(filePath);
     }
   });
 
@@ -294,7 +292,22 @@ function isEntryPath (filePath: string)
 
 function isCodePath (filePath: string)
 {
-  return filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx');
+  const exts = ['.ts', '.tsx', '.js', '.jsx'];
+
+  for (const ext of exts)
+  {
+    if (filePath.endsWith(ext))
+    {
+      const tempExt = '.wkcsstmp' + ext;
+
+      if (!filePath.endsWith(tempExt))
+      {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function collectFiles ()
@@ -324,20 +337,33 @@ function collectEntriesDependencies ()
 
 function collectEntryDependencies (entryName: string)
 {
+  function getBundles (filePath: string)
+  {
+    return evaluator.getBundles(filePath, packages);
+  }
+
   const entryPaths = entries[entryName];
   
   for (const entryPath of entryPaths)
   {
-    const dependencyPaths = evaluator.getBundles(entryPath, packages);
+    const dependencyPaths = getBundles(entryPath);
 
     for (const dependencyPath of dependencyPaths)
     {
+      if (!isCodePath(dependencyPath))
+      {
+        continue;
+      }
+
       if (!entryDependencies[dependencyPath])
       {
         entryDependencies[dependencyPath] = [];
       }
 
-      entryDependencies[dependencyPath].push(entryName);
+      if (!entryDependencies[dependencyPath].includes(entryName))
+      {
+        entryDependencies[dependencyPath].push(entryName);
+      }
     }
   }
 }
@@ -355,7 +381,7 @@ function releaseEntryDependencies (entryName: string)
   }
 }
 
-async function updateEntryFile (filePath: string)
+function updateEntryFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
@@ -369,10 +395,10 @@ async function updateEntryFile (filePath: string)
   releaseEntryDependencies(entryName);
   collectEntryDependencies(entryName);
 
-  await buildEntry(entryName);
+  buildEntry(entryName);
 }
 
-async function deleteEntryFile (filePath: string)
+function deleteEntryFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
@@ -380,16 +406,16 @@ async function deleteEntryFile (filePath: string)
 
   releaseEntryDependencies(entryName);
   
-  await buildEntry(entryName);
+  buildEntry(entryName);
 }
 
-async function updateCodeFile (filePath: string)
+function updateCodeFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
     return;
   }
-
+  
   hashes.setChanged(filePath);
 
   if (entryDependencies[filePath])
@@ -398,12 +424,15 @@ async function updateCodeFile (filePath: string)
 
     for (const entryName of entryNames)
     {
-      await buildEntry(entryName);  
+      releaseEntryDependencies(entryName);
+      collectEntryDependencies(entryName);
+
+      buildEntry(entryName);  
     }
   }
 }
 
-async function deleteCodeFile (filePath: string)
+function deleteCodeFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
@@ -415,12 +444,15 @@ async function deleteCodeFile (filePath: string)
 
     for (const entryName of entryNames)
     {
-      await buildEntry(entryName);  
+      releaseEntryDependencies(entryName);
+      collectEntryDependencies(entryName);
+
+      buildEntry(entryName);  
     }
   }
 }
 
-async function updateModuleFile (filePath: string)
+function updateModuleFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
@@ -430,10 +462,10 @@ async function updateModuleFile (filePath: string)
 
   hashes.setChanged(filePath);
 
-  await buildModule(filePath, true);
+  buildModule(filePath, true);
 }
 
-async function deleteModuleFile (filePath: string)
+function deleteModuleFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
@@ -451,7 +483,7 @@ async function deleteModuleFile (filePath: string)
 
       if (entries[entryName])
       {
-        await buildEntry(entryName);
+        buildEntry(entryName);
       }
     }
   }
@@ -469,7 +501,7 @@ async function deleteModuleFile (filePath: string)
   }
 }
 
-async function buildModules ()
+function buildModules ()
 {
   for (const source of config.sources)
   {
@@ -480,13 +512,13 @@ async function buildModules ()
 
       for (const modulePath of modulePaths)
       {
-        await buildModule(modulePath, false);
+        buildModule(modulePath, false);
       }
     }
   }
 }
 
-async function buildModule (filePath: string, shouldRebuildEntry: boolean)
+function buildModule (filePath: string, shouldRebuildEntry: boolean)
 {
   interface Data
   {
@@ -494,19 +526,13 @@ async function buildModule (filePath: string, shouldRebuildEntry: boolean)
     default: Stylesheet;
   }
 
-  function readFromScript (): Data
+  const data = evaluator.getConsts<Data>(filePath, ['entry', 'default']);
+  
+  if (!data)
   {
-    const entry = evaluator.getConst(filePath, 'entry');
-    const src = evaluator.getConst(filePath, 'default');
-
-    return {
-      entry,
-      default: src,
-    };
+    return;
   }
 
-  const data = readFromScript();
-  
   if (typeof data.entry === 'string' && data.entry?.length > 0)
   {
     const outPath = replaceModuleExtension(filePath);
@@ -537,7 +563,7 @@ async function buildModule (filePath: string, shouldRebuildEntry: boolean)
 
     if (entries[entryName] && shouldRebuildEntry)
     {
-      await buildEntry(entryName);
+      buildEntry(entryName);
     }
   }
   else
@@ -570,15 +596,15 @@ async function buildModule (filePath: string, shouldRebuildEntry: boolean)
   }
 }
 
-async function buildEntries ()
+function buildEntries ()
 {
   for (const entryName in entries)
   {
-    await buildEntry(entryName);
+    buildEntry(entryName);
   }
 }
 
-async function buildEntry (entryName: string)
+function buildEntry (entryName: string)
 {
   const entryStyles: Array<Styles> = [];
 
@@ -607,7 +633,7 @@ async function buildEntry (entryName: string)
   fsx.mkdirpSync(config.build.directory);
 
   const outPath = path.join(config.build.directory, entryName + '.css');
-  const outData = await buildCSS(outPath, entryCSS);
+  const outData = buildCSS(entryCSS);
 
   if (!fs.existsSync(outPath))
   {
@@ -629,39 +655,9 @@ async function buildEntry (entryName: string)
   fs.writeFileSync(outPath, outData);
 }
 
-async function buildCSS (from: string, input: string)
+function buildCSS (input: string)
 {
   return input;
-  // if (Array.isArray(config.build.postcss) && config.build.postcss.length > 0)
-  // {
-  //   const enums = {
-  //     'autoprefixer': 'autoprefixer',
-  //     'merge-rules': 'postcss-merge-rules',
-  //   };
-
-  //   const plugins: any[] = [];
-
-  //   for (const plugin of config.build.postcss)
-  //   {
-  //     plugins.push(enums[plugin]);
-  //   }
-  
-  //   try
-  //   {
-  //     const processor = postCSS(plugins);
-  //     const result = await processor.process(input, { from });
-
-  //     return result.css || input;
-  //   }
-  //   catch
-  //   {
-  //     return input;
-  //   }
-  // }
-  // else
-  // {
-  //   return input;
-  // }
 }
 
 function buildStyles (styles: Styles)

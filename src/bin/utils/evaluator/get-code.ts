@@ -8,7 +8,7 @@ function createTempName (file: string)
   const id = nanoid();
   const p = parse(file);
   const dir = p.dir;
-  const dst = join(dir, p.name + '.' + id + '.temp' + p.ext);
+  const dst = join(dir, p.name + '.' + id + '.wkcsstmp' + p.ext);
 
   return dst;
 }
