@@ -607,7 +607,7 @@ async function buildEntry (entryName: string)
   fsx.mkdirpSync(config.build.directory);
 
   const outPath = path.join(config.build.directory, entryName + '.css');
-  const outData = await buildCSS(entryCSS);
+  const outData = await buildCSS(outPath, entryCSS);
 
   if (!fs.existsSync(outPath))
   {
@@ -629,7 +629,7 @@ async function buildEntry (entryName: string)
   fs.writeFileSync(outPath, outData);
 }
 
-async function buildCSS (input: string)
+async function buildCSS (from: string, input: string)
 {
   try
   {
@@ -638,7 +638,7 @@ async function buildCSS (input: string)
       require('postcss-merge-rules'),
     ]);
   
-    const result = await processor.process(input);
+    const result = await processor.process(input, { from });
     return result.css || input;
   }
   catch
