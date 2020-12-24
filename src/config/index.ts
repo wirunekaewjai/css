@@ -5,9 +5,6 @@ export default function create (input: Config)
   const out: Config = {
     packages: input.packages,
     sources: input.sources,
-    // source: {
-    //   directory: input.source.directory,
-    // },
 
     module: {
       inputs: input.module.inputs,

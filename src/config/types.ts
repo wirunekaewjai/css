@@ -25,3 +25,5 @@ export interface Build {
 export interface Generic<T> {
   [name: string]: T;
 }
+
+export type PostCSSPlugins = 'autoprefixer' | 'merge-rules';

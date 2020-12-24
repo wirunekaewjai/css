@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import fsx from 'fs-extra';
 
-import postCSS from 'postcss';
+// import postCSS from 'postcss';
 
 import evaluator from '../utils/evaluator';
 
@@ -631,20 +631,37 @@ async function buildEntry (entryName: string)
 
 async function buildCSS (from: string, input: string)
 {
-  try
-  {
-    const processor = postCSS([
-      require('autoprefixer'),
-      require('postcss-merge-rules'),
-    ]);
+  return input;
+  // if (Array.isArray(config.build.postcss) && config.build.postcss.length > 0)
+  // {
+  //   const enums = {
+  //     'autoprefixer': 'autoprefixer',
+  //     'merge-rules': 'postcss-merge-rules',
+  //   };
+
+  //   const plugins: any[] = [];
+
+  //   for (const plugin of config.build.postcss)
+  //   {
+  //     plugins.push(enums[plugin]);
+  //   }
   
-    const result = await processor.process(input, { from });
-    return result.css || input;
-  }
-  catch
-  {
-    return input;
-  }
+  //   try
+  //   {
+  //     const processor = postCSS(plugins);
+  //     const result = await processor.process(input, { from });
+
+  //     return result.css || input;
+  //   }
+  //   catch
+  //   {
+  //     return input;
+  //   }
+  // }
+  // else
+  // {
+  //   return input;
+  // }
 }
 
 function buildStyles (styles: Styles)
