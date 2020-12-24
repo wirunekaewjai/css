@@ -4,6 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import fsx from 'fs-extra';
 
+import postCSS from 'postcss';
+
 import evaluator from '../utils/evaluator';
 
 import Hashes from '../utils/hashes';
@@ -32,7 +34,7 @@ let globalStylePaths: Generic<string>;
 
 let localStyles: Generic<Styles>;
 
-export default function run (args: Args)
+export default async function run (args: Args)
 {
   const pkgPath = 'package.json';
 
@@ -107,7 +109,7 @@ export default function run (args: Args)
     {
       const watcher = chokidar.watch(configPath);
 
-      watcher.on('add', () => 
+      watcher.on('add', async () => 
       {
         config = evaluator.getConst(configPath, 'default');
 
@@ -118,7 +120,7 @@ export default function run (args: Args)
         }
 
         init();
-        build();
+        await build();
         watch();
       });
 
@@ -148,7 +150,7 @@ export default function run (args: Args)
   else
   {
     init();
-    build();
+    await build();
   }
 }
 
@@ -200,10 +202,10 @@ function init ()
   collectFiles();
 }
 
-function build ()
+async function build ()
 {
-  buildModules();
-  buildEntries();
+  await buildModules();
+  await buildEntries();
 }
 
 function watch ()
@@ -211,51 +213,51 @@ function watch ()
   const patterns = config.sources.map(source => path.join(source.directory, '/**/*'));
   const watcher = chokidar.watch(patterns);
 
-  watcher.on('add', (filePath) =>
+  watcher.on('add', async (filePath) =>
   {
     if (isModulePath(filePath))
     {
-      updateModuleFile(filePath);
+      await updateModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      updateEntryFile(filePath);
+      await updateEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      updateCodeFile(filePath);
+      await updateCodeFile(filePath);
     }
   });
 
-  watcher.on('change', (filePath) =>
+  watcher.on('change', async (filePath) =>
   {
     if (isModulePath(filePath))
     {
-      updateModuleFile(filePath);
+      await updateModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      updateEntryFile(filePath);
+      await updateEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      updateCodeFile(filePath);
+      await updateCodeFile(filePath);
     }
   });
 
-  watcher.on('unlink', (filePath) =>
+  watcher.on('unlink', async (filePath) =>
   {
     if (isModulePath(filePath))
     {
-      deleteModuleFile(filePath);
+      await deleteModuleFile(filePath);
     }
     else if (isEntryPath(filePath))
     {
-      deleteEntryFile(filePath);
+      await deleteEntryFile(filePath);
     }
     else if (isCodePath(filePath))
     {
-      deleteCodeFile(filePath);
+      await deleteCodeFile(filePath);
     }
   });
 
@@ -353,7 +355,7 @@ function releaseEntryDependencies (entryName: string)
   }
 }
 
-function updateEntryFile (filePath: string)
+async function updateEntryFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
@@ -367,20 +369,21 @@ function updateEntryFile (filePath: string)
   releaseEntryDependencies(entryName);
   collectEntryDependencies(entryName);
 
-  buildEntry(entryName);
+  await buildEntry(entryName);
 }
 
-function deleteEntryFile (filePath: string)
+async function deleteEntryFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
   const entryName = entryReverses[filePath];
 
   releaseEntryDependencies(entryName);
-  buildEntry(entryName);
+  
+  await buildEntry(entryName);
 }
 
-function updateCodeFile (filePath: string)
+async function updateCodeFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
@@ -395,12 +398,12 @@ function updateCodeFile (filePath: string)
 
     for (const entryName of entryNames)
     {
-      buildEntry(entryName);  
+      await buildEntry(entryName);  
     }
   }
 }
 
-function deleteCodeFile (filePath: string)
+async function deleteCodeFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
@@ -412,12 +415,12 @@ function deleteCodeFile (filePath: string)
 
     for (const entryName of entryNames)
     {
-      buildEntry(entryName);  
+      await buildEntry(entryName);  
     }
   }
 }
 
-function updateModuleFile (filePath: string)
+async function updateModuleFile (filePath: string)
 {
   if (!hashes.hasChanged(filePath))
   {
@@ -427,10 +430,10 @@ function updateModuleFile (filePath: string)
 
   hashes.setChanged(filePath);
 
-  buildModule(filePath, true);
+  await buildModule(filePath, true);
 }
 
-function deleteModuleFile (filePath: string)
+async function deleteModuleFile (filePath: string)
 {
   hashes.setChanged(filePath);
 
@@ -448,7 +451,7 @@ function deleteModuleFile (filePath: string)
 
       if (entries[entryName])
       {
-        buildEntry(entryName);
+        await buildEntry(entryName);
       }
     }
   }
@@ -466,7 +469,7 @@ function deleteModuleFile (filePath: string)
   }
 }
 
-function buildModules ()
+async function buildModules ()
 {
   for (const source of config.sources)
   {
@@ -477,13 +480,13 @@ function buildModules ()
 
       for (const modulePath of modulePaths)
       {
-        buildModule(modulePath, false);
+        await buildModule(modulePath, false);
       }
     }
   }
 }
 
-function buildModule (filePath: string, shouldRebuildEntry: boolean)
+async function buildModule (filePath: string, shouldRebuildEntry: boolean)
 {
   interface Data
   {
@@ -534,7 +537,7 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
 
     if (entries[entryName] && shouldRebuildEntry)
     {
-      buildEntry(entryName);
+      await buildEntry(entryName);
     }
   }
   else
@@ -567,15 +570,15 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
   }
 }
 
-function buildEntries ()
+async function buildEntries ()
 {
   for (const entryName in entries)
   {
-    buildEntry(entryName);
+    await buildEntry(entryName);
   }
 }
 
-function buildEntry (entryName: string)
+async function buildEntry (entryName: string)
 {
   const entryStyles: Array<Styles> = [];
 
@@ -604,7 +607,7 @@ function buildEntry (entryName: string)
   fsx.mkdirpSync(config.build.directory);
 
   const outPath = path.join(config.build.directory, entryName + '.css');
-  const outData = entryCSS;
+  const outData = await buildCSS(entryCSS);
 
   if (!fs.existsSync(outPath))
   {
@@ -624,6 +627,24 @@ function buildEntry (entryName: string)
   }
 
   fs.writeFileSync(outPath, outData);
+}
+
+async function buildCSS (input: string)
+{
+  try
+  {
+    const processor = postCSS([
+      require('autoprefixer'),
+      require('postcss-merge-rules'),
+    ]);
+  
+    const result = await processor.process(input);
+    return result.css || input;
+  }
+  catch
+  {
+    return input;
+  }
 }
 
 function buildStyles (styles: Styles)
@@ -1064,6 +1085,65 @@ function parseLocalStyle ({ stylesheet }: Stylesheet)
     }
   }
 
+  function createKeyframes (src: Keyframes, dst: Styles)
+  {
+    const key = `@keyframes ${src.name}`;
+    const tokens: string[] = [];
+
+    for (const keyframe of src.keyframes)
+    {
+      if (keyframe.type === 'comment')
+      {
+        continue;
+      }
+
+      const properties: string[] = [];
+
+      for (const declaration of keyframe.declarations)
+      {
+        if (declaration.type === 'comment')
+        {
+          continue;
+        }
+
+        properties.push(declaration.property + ': ' + declaration.value);
+      }
+
+      const selector = array.join(keyframe.values, ', ');
+      const property = array.join(properties, '; ');
+      
+      tokens.push(`${selector} { ${property} }`);
+    }
+
+    dst[key] = tokens;
+  }
+
+  function createPage (src: Rule, dst: Styles)
+  {
+    const selectors = src.selectors.length > 0 ? src.selectors.map(e => '@page' + e) : ['@page'];
+
+    for (const selector of selectors)
+    {
+      if (!dst[selector])
+      {
+        dst[selector] = [];
+      }
+
+      const props = dst[selector] as string[];
+
+      for (const declaration of src.declarations)
+      {
+        if (declaration.type === 'comment')
+        {
+          continue;
+        }
+
+        const token = declaration.property + ': ' + declaration.value;
+        props.push(token);
+      }
+    }
+  }
+
   function createMedia (src: Media, dst: Styles, prefixes: string[])
   {
     const key = `@media ${src.media}`;
@@ -1103,6 +1183,14 @@ function parseLocalStyle ({ stylesheet }: Stylesheet)
     else if (src.type === 'media')
     {
       createMedia(src, dst, prefixes);
+    }
+    else if (src.type === 'page')
+    {
+      createPage(src, dst);
+    }
+    else if (src.type === 'keyframes')
+    {
+      createKeyframes(src, dst);
     }
     else if (src.type === 'rule')
     {
