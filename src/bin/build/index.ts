@@ -5,13 +5,11 @@ import fs from 'fs';
 import fsx from 'fs-extra';
 
 import evaluator from '../utils/evaluator';
-
 import Hashes from '../utils/hashes';
-import Incremental from '../utils/incremental';
 
-import array from '../utils/array';
+import styleParser from './style-parser';
 
-import { Stylesheet, Supports, Media, Keyframes, Rule, Comment } from '../../utils/css/parse/types';
+import { Stylesheet } from '../../utils/css/parse/types';
 import { Config } from '../../config/types';
 import { Args, Generic, Styles } from './types';
 
@@ -19,7 +17,6 @@ let config: Config;
 let packages: string[];
 let watchers: FSWatcher[];
 
-let incremental: Incremental;
 let hashes: Hashes;
 
 let entries: Generic<string[]>;
@@ -107,7 +104,7 @@ export default function run (args: Args)
     {
       const watcher = chokidar.watch(configPath);
 
-      watcher.on('add', async () => 
+      watcher.on('add', () => 
       {
         config = evaluator.getConst(configPath, 'default');
 
@@ -188,7 +185,6 @@ function init ()
   initWatchers();
   initEntries();
 
-  incremental = new Incremental();
   hashes = new Hashes();
 
   globalStyles = {};
@@ -196,6 +192,8 @@ function init ()
 
   localStyles = {};
 
+  styleParser.local.init();
+  
   collectEntriesDependencies();
   collectFiles();
 }
@@ -211,7 +209,7 @@ function watch ()
   const patterns = config.sources.map(source => path.join(source.directory, '/**/*'));
   const watcher = chokidar.watch(patterns);
 
-  watcher.on('add', async (filePath) =>
+  watcher.on('add', (filePath) =>
   {
     if (isModulePath(filePath))
     {
@@ -227,7 +225,7 @@ function watch ()
     }
   });
 
-  watcher.on('change', async (filePath) =>
+  watcher.on('change', (filePath) =>
   {
     if (isModulePath(filePath))
     {
@@ -243,7 +241,7 @@ function watch ()
     }
   });
 
-  watcher.on('unlink', async (filePath) =>
+  watcher.on('unlink', (filePath) =>
   {
     if (isModulePath(filePath))
     {
@@ -273,6 +271,11 @@ function replaceModuleExtension (filePath: string)
   }
 
   return filePath;
+}
+
+function isFile (filePath: string)
+{
+  return fs.lstatSync(filePath);
 }
 
 function isModulePath (filePath: string)
@@ -310,6 +313,26 @@ function isCodePath (filePath: string)
   return false;
 }
 
+function isTempPath (filePath: string)
+{
+  const exts = ['.ts', '.tsx', '.js', '.jsx'];
+
+  for (const ext of exts)
+  {
+    if (filePath.endsWith(ext))
+    {
+      const tempExt = '.wkcsstmp' + ext;
+
+      if (filePath.endsWith(tempExt))
+      {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function collectFiles ()
 {
   for (const source of config.sources)
@@ -319,11 +342,18 @@ function collectFiles ()
 
     for (const filePath of paths)
     {
-      if (isModulePath(filePath) || isEntryPath(filePath) || isCodePath(filePath))
+      if (isFile(filePath))
       {
-        hashes.setChanged(filePath);
+        if (isTempPath(filePath))
+        {
+          fs.unlinkSync(filePath);
+        }
+        else if (isModulePath(filePath) || isEntryPath(filePath) || isCodePath(filePath))
+        {
+          hashes.setChanged(filePath);
+        }
       }
-    }  
+    }
   }
 }
 
@@ -512,7 +542,10 @@ function buildModules ()
 
       for (const modulePath of modulePaths)
       {
-        buildModule(modulePath, false);
+        if (isFile(modulePath))
+        {
+          buildModule(modulePath, false);
+        }
       }
     }
   }
@@ -548,7 +581,7 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
       delete localStyles[outPath];
     }
 
-    const { styles } = parseGlobalStyle(data.default);
+    const { styles } = styleParser.global(data.default);
     const entryName = data.entry;;
 
     if (!globalStyles[entryName])
@@ -568,7 +601,7 @@ function buildModule (filePath: string, shouldRebuildEntry: boolean)
   }
   else
   {
-    const { modules, styles } = parseLocalStyle(data.default);
+    const { modules, styles } = styleParser.local.parse(data.default);
     const outPath = replaceModuleExtension(filePath);
     
     if (Object.keys(modules).length === 0)
@@ -627,13 +660,13 @@ function buildEntry (entryName: string)
     }
   }
 
-  const entryStyle = mergeStyles(entryStyles);
-  const entryCSS = buildStyles(entryStyle);
+  const entryStyle = styleParser.merge(entryStyles);
+  const entryCSS = styleParser.build(entryStyle);
 
   fsx.mkdirpSync(config.build.directory);
 
   const outPath = path.join(config.build.directory, entryName + '.css');
-  const outData = buildCSS(entryCSS);
+  const outData = entryCSS;
 
   if (!fs.existsSync(outPath))
   {
@@ -653,578 +686,4 @@ function buildEntry (entryName: string)
   }
 
   fs.writeFileSync(outPath, outData);
-}
-
-function buildCSS (input: string)
-{
-  return input;
-}
-
-function buildStyles (styles: Styles)
-{
-  function getSpace (indent: number)
-  {
-    return ''.padStart(indent, ' ');
-  }
-
-  function getIndex (token: string)
-  {
-    if (token.startsWith('*'))
-    {
-      return 1;
-    }
-    else if (token.startsWith(':root'))
-    {
-      return 2;
-    }
-    else if (token.startsWith('@page'))
-    {
-      return 3;
-    }
-    else if (token.startsWith('html'))
-    {
-      return 4;
-    }
-    else if (token.startsWith('body'))
-    {
-      return 5;
-    }
-    // 6 = tag
-    else if (token.startsWith(':'))
-    {
-      return 7;
-    }
-    else if (token.startsWith('['))
-    {
-      return 8;
-    }
-    else if (token.startsWith('.'))
-    {
-      return 9;
-    }
-    else if (token.startsWith('#'))
-    {
-      return 10;
-    }
-    else if (token.startsWith('@media'))
-    {
-      return 11;
-    }
-    else if (token.startsWith('@supports'))
-    {
-      return 12;
-    }
-
-    // tag
-    return 6;
-  }
-
-  function sort (css: string[])
-  {
-    return css.sort((a, b) =>
-    {
-      const ai = getIndex(a);
-      const bi = getIndex(b);
-
-      if (ai !== bi)
-      {
-        return ai - bi;
-      }
-
-      return a.localeCompare(b);
-    });
-  }
-
-  function buildStyle (src: Styles, indent: number)
-  {
-    const css: string[] = [];
-    const space = getSpace(indent);
-
-    for (const key in src)
-    {
-      if (key.startsWith('@supports') || key.startsWith('@media'))
-      {
-        const value = buildStyle(src[key] as Styles, indent + 1);
-        const token = `${space}${key} {\n${space} ${value}\n${space}}`;
-
-        css.push(token);
-      }
-      else if (key.startsWith('@page'))
-      {
-        const values = src[key] as string[];
-        const value = array.join(values, '; ');
-        const token = `${space}${key} { ${value} }`;
-
-        css.push(token);
-      }
-      else if (key.startsWith('@keyframes'))
-      {
-        const values = src[key] as string[];
-        const value = array.join(values, ' ');
-        const token = `${space}${key} { ${value} }`;
-
-        css.push(token);
-      }
-      else
-      {
-        const selectors = src[key] as string[];
-        const selector = array.join(sort(array.distinct(selectors)), ', ');
-        const token = `${space}${selector} { ${key} }`;
-
-        css.push(token);
-      }
-    }
-
-    return array.join(sort(css), '\n');
-  }
-
-  return buildStyle(styles, 0);
-}
-
-function mergeStyles (entryStyles: Array<Styles>)
-{
-  function mergeStyle (src: Styles, dst: Styles)
-  {
-    for (const key in src)
-    {
-      if (key.startsWith('@supports') || key.startsWith('@media'))
-      {
-        if (!dst[key])
-        {
-          dst[key] = {};
-        }
-
-        const srcStyles = src[key] as Styles;
-        const dstStyles = dst[key] as Styles;
-
-        mergeStyle(srcStyles, dstStyles);
-      }
-      else if (key.startsWith('@page'))
-      {
-        if (!dst[key])
-        {
-          dst[key] = [];
-        }
-
-        const srcProps = src[key] as string[];
-        const dstProps = dst[key] as string[];
-
-        for (const prop of srcProps)
-        {
-          dstProps.push(prop);
-        }
-      }
-      else
-      {
-        if (!dst[key])
-        {
-          dst[key] = [];
-        }
-
-        const srcSelectors = src[key] as string[];
-        const dstSelectors = dst[key] as string[];
-
-        for (const selector of srcSelectors)
-        {
-          dstSelectors.push(selector);
-        }
-      }
-    }
-  }
-
-  function mergeTag (src: Styles)
-  {
-    const merges: Generic<string[]> = {};
-    const dst: Styles = {};
-
-    for (const key in src)
-    {
-      const val = src[key];
-
-      if (key.startsWith('@'))
-      {
-        if (Array.isArray(val))
-        {
-          dst[key] = val;
-        }
-        else
-        {
-          dst[key] = mergeTag(val);
-        }
-      }
-      else
-      {
-        const vals = val as string[];
-
-        if (vals.length > 1)
-        {
-          dst[key] = vals;
-        }
-        else if (vals.length === 1)
-        {
-          if (vals[0].startsWith('.'))
-          {
-            dst[key] = vals;
-          }
-          else
-          {
-            if (!merges[vals[0]])
-            {
-              merges[vals[0]] = [];
-            }
-
-            merges[vals[0]].push(key);
-          }
-        }
-      }
-    }
-
-    for (const selector in merges)
-    {
-      const property = array.join(merges[selector], '; ');
-      dst[property] = [selector];
-    }
-
-    return dst;
-  }
-
-  const dst1: Styles = {};
-
-  for (const src of entryStyles)
-  {
-    mergeStyle(src, dst1);
-  }
-
-  return mergeTag(dst1);
-}
-
-function parseGlobalStyle ({ stylesheet }: Stylesheet)
-{
-  const styles: Styles = {};
-
-  function createRule (src: Rule, dst: Styles)
-  {
-    for (const declaration of src.declarations)
-    {
-      if (declaration.type === 'comment')
-      {
-        continue;
-      }
-
-      const token = declaration.property + ': ' + declaration.value;
-      
-      if (!dst[token])
-      {
-        dst[token] = [];
-      }
-
-      const selectors = dst[token] as string[];
-
-      for (const selector of src.selectors)
-      {
-        selectors.push(selector);
-      }
-    }
-  }
-
-  function createKeyframes (src: Keyframes, dst: Styles)
-  {
-    const key = `@keyframes ${src.name}`;
-    const tokens: string[] = [];
-
-    for (const keyframe of src.keyframes)
-    {
-      if (keyframe.type === 'comment')
-      {
-        continue;
-      }
-
-      const properties: string[] = [];
-
-      for (const declaration of keyframe.declarations)
-      {
-        if (declaration.type === 'comment')
-        {
-          continue;
-        }
-
-        properties.push(declaration.property + ': ' + declaration.value);
-      }
-
-      const selector = array.join(keyframe.values, ', ');
-      const property = array.join(properties, '; ');
-      
-      tokens.push(`${selector} { ${property} }`);
-    }
-
-    dst[key] = tokens;
-  }
-
-  function createPage (src: Rule, dst: Styles)
-  {
-    const selectors = src.selectors.length > 0 ? src.selectors.map(e => '@page' + e) : ['@page'];
-
-    for (const selector of selectors)
-    {
-      if (!dst[selector])
-      {
-        dst[selector] = [];
-      }
-
-      const props = dst[selector] as string[];
-
-      for (const declaration of src.declarations)
-      {
-        if (declaration.type === 'comment')
-        {
-          continue;
-        }
-
-        const token = declaration.property + ': ' + declaration.value;
-        props.push(token);
-      }
-    }
-  }
-
-  function createMedia (src: Media, dst: Styles)
-  {
-    const key = `@media ${src.media}`;
-
-    if (!dst[key])
-    {
-      dst[key] = {};
-    }
-
-    for (const rule of src.rules)
-    {
-      create(rule, dst[key] as Styles);
-    }
-  }
-
-  function createSupports (src: Supports, dst: Styles)
-  {
-    const key = `@supports ${src.supports}`;
-
-    if (!dst[key])
-    {
-      dst[key] = {};
-    }
-
-    for (const rule of src.rules)
-    {
-      create(rule, dst[key] as Styles);
-    }
-  }
-
-  function create (src: Supports | Media | Keyframes| Rule | Comment, dst: Styles)
-  {
-   if (src.type === 'supports')
-    {
-      createSupports(src, dst);
-    }
-    else if (src.type === 'media')
-    {
-      createMedia(src, dst);
-    }
-    else if (src.type === 'page')
-    {
-      createPage(src, dst);
-    }
-    else if (src.type === 'keyframes')
-    {
-      createKeyframes(src, dst);
-    }
-    else if (src.type === 'rule')
-    {
-      createRule(src, dst);
-    }
-  }
-
-  for (const rule of stylesheet.rules)
-  {
-    create(rule, styles);  
-  }
-
-  return { styles };
-}
-
-function parseLocalStyle ({ stylesheet }: Stylesheet)
-{
-  const styles: Styles = {};
-  const modules: Generic<string[]> = {};
-
-  function createRule (src: Rule, dst: Styles, prefixes: string[])
-  {
-    for (const declaration of src.declarations)
-    {
-      if (declaration.type === 'comment')
-      {
-        continue;
-      }
-      
-      const token = declaration.property + ': ' + declaration.value;
-      
-      if (!dst[token])
-      {
-        dst[token] = [];
-      }
-
-      const selectors = dst[token] as string[];
-
-      for (const selector of src.selectors)
-      {
-        let module: string = '';
-        let suffix: string = '';
-
-        selector.replace(/module-[A-Za-z0-9-_]+/, (c, i) =>
-        {
-          module = c.slice(7);
-          suffix = selector.slice(i + c.length);
-
-          return c;
-        });
-
-        const key = array.join([...prefixes, declaration.property, declaration.value, suffix], '-');
-        const id = incremental.get(key);
-
-        if (!modules[module])
-        {
-          modules[module] = [];
-        }
-
-        modules[module].push(id);
-        selectors.push('.' + id + suffix);
-      }
-    }
-  }
-
-  function createKeyframes (src: Keyframes, dst: Styles)
-  {
-    const key = `@keyframes ${src.name}`;
-    const tokens: string[] = [];
-
-    for (const keyframe of src.keyframes)
-    {
-      if (keyframe.type === 'comment')
-      {
-        continue;
-      }
-
-      const properties: string[] = [];
-
-      for (const declaration of keyframe.declarations)
-      {
-        if (declaration.type === 'comment')
-        {
-          continue;
-        }
-
-        properties.push(declaration.property + ': ' + declaration.value);
-      }
-
-      const selector = array.join(keyframe.values, ', ');
-      const property = array.join(properties, '; ');
-      
-      tokens.push(`${selector} { ${property} }`);
-    }
-
-    dst[key] = tokens;
-  }
-
-  function createPage (src: Rule, dst: Styles)
-  {
-    const selectors = src.selectors.length > 0 ? src.selectors.map(e => '@page' + e) : ['@page'];
-
-    for (const selector of selectors)
-    {
-      if (!dst[selector])
-      {
-        dst[selector] = [];
-      }
-
-      const props = dst[selector] as string[];
-
-      for (const declaration of src.declarations)
-      {
-        if (declaration.type === 'comment')
-        {
-          continue;
-        }
-
-        const token = declaration.property + ': ' + declaration.value;
-        props.push(token);
-      }
-    }
-  }
-
-  function createMedia (src: Media, dst: Styles, prefixes: string[])
-  {
-    const key = `@media ${src.media}`;
-
-    if (!dst[key])
-    {
-      dst[key] = {};
-    }
-
-    for (const rule of src.rules)
-    {
-      create(rule, dst[key] as Styles, [...prefixes, src.media]);
-    }
-  }
-
-  function createSupports (src: Supports, dst: Styles, prefixes: string[])
-  {
-    const key = `@supports ${src.supports}`;
-
-    if (!dst[key])
-    {
-      dst[key] = {};
-    }
-
-    for (const rule of src.rules)
-    {
-      create(rule, dst[key] as Styles, [...prefixes, src.supports]);
-    }
-  }
-
-  function create (src: Supports | Media | Keyframes | Rule | Comment, dst: Styles, prefixes: string[])
-  {
-   if (src.type === 'supports')
-    {
-      createSupports(src, dst, prefixes);
-    }
-    else if (src.type === 'media')
-    {
-      createMedia(src, dst, prefixes);
-    }
-    else if (src.type === 'page')
-    {
-      createPage(src, dst);
-    }
-    else if (src.type === 'keyframes')
-    {
-      createKeyframes(src, dst);
-    }
-    else if (src.type === 'rule')
-    {
-      createRule(src, dst, prefixes);
-    }
-  }
-
-  for (const rule of stylesheet.rules)
-  {
-    create(rule, styles, []);  
-  }
-
-  const _modules: Generic<string> = {};
-
-  for (const module in modules)
-  {
-    _modules[module] = array.join(modules[module], ' ');
-  }
-  
-  return {
-    modules: _modules,
-    styles,
-  };
 }
