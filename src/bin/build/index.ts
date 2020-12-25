@@ -301,7 +301,7 @@ function isCodePath (filePath: string)
   {
     if (filePath.endsWith(ext))
     {
-      const tempExt = '.wkcsstmp' + ext;
+      const tempExt = '.wktmp' + ext;
 
       if (!filePath.endsWith(tempExt))
       {
@@ -321,7 +321,7 @@ function isTempPath (filePath: string)
   {
     if (filePath.endsWith(ext))
     {
-      const tempExt = '.wkcsstmp' + ext;
+      const tempExt = '.wktmp' + ext;
 
       if (filePath.endsWith(tempExt))
       {

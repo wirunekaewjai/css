@@ -14,7 +14,7 @@ export default function evaluate<T> (file: string, fields: string[], externals?:
     return undefined;
   }
 
-  const moduleID = path.resolve(path.join('.', nanoid()));
+  const moduleID = path.resolve(path.join('.', 'esm_' + nanoid(6) + '.wktmp'));
   const modulePath = moduleID + '.js';
 
   fs.writeFileSync(modulePath, code);
