@@ -9,6 +9,8 @@ const lowerCaseIgnoreds = [
   '*.png',
   '*.gif',
   '*.webp',
+
+  '*.svg',
   
   '*.css',
   '*.scss',
